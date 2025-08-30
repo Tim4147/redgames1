@@ -1,46 +1,167 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <!-- Meta Pixel Code -->
-<script>
-!function(f,b,e,v,n,t,s)
-{if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-n.queue=[];t=b.createElement(e);t.async=!0;
-t.src=v;s=b.getElementsByTagName(e)[0];
-s.parentNode.insertBefore(t,s)}(window, document,'script',
-'https://connect.facebook.net/en_US/fbevents.js');
-fbq('init', '635287639031463');
-fbq('track', 'PageView');
-</script>
-<noscript><img height="1" width="1" style="display:none"
-src="https://www.facebook.com/tr?id=635287639031463&ev=PageView&noscript=1"
-/></noscript>
-<!-- End Meta Pixel Code -->
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Redgames1.com</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
-</head>
-<body class="bg-black text-white flex flex-col items-center justify-center min-h-screen p-6">
-    
-    <div class="bg-gray-900 rounded-lg p-10 shadow-2xl w-full max-w-md text-center space-y-6">
-        <img src="https://i.ibb.co/sJHfc94L/redgames-logo.png" alt="Redgames1 Logo" class="mx-auto w-40 h-40 rounded-full shadow-lg">
-        
-        <div class="space-y-4">
-            <a href="https://wa.me/918197578387" 
-               class="block bg-green-500 text-white font-bold py-3 px-6 rounded-lg shadow-lg hover:bg-green-600 transition text-lg">
-                Get Your Account on WhatsApp
-            </a>
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Manual Push</title>
+<style>
+  :root { --c:#111; --b:#f5f5f7; --p:#0a84ff; --ok:#0a0; --bad:#b00020; }
+  *{box-sizing:border-box} body{font-family:system-ui,Arial;margin:0;background:var(--b);color:var(--c)}
+  .wrap{max-width:800px;margin:auto;padding:24px}
+  h1{margin:0 0 12px}
+  .card{background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:16px;margin:12px 0}
+  label{display:block;margin:8px 0;font-weight:600}
+  input,select,textarea,button{font:inherit;width:100%;padding:10px;border:1px solid #ccc;border-radius:8px}
+  textarea{min-height:90px;resize:vertical}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  button{cursor:pointer;background:var(--p);color:#fff;border:0}
+  button.secondary{background:#eee;color:#222}
+  .meta{font-size:12px;color:#666}
+  .status{margin-top:8px}
+  .status.ok{color:var(--ok)} .status.bad{color:var(--bad)}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{padding:8px;border-bottom:1px solid #eee;text-align:left}
+  .balance{font-weight:800}
+  .pill{display:inline-block;padding:4px 8px;border-radius:999px;background:#f1f1f1;font-size:12px}
+</style>
 
-            <a href="https://redgames1.com" 
-               class="block bg-yellow-500 text-black font-bold py-3 px-6 rounded-lg shadow-lg hover:bg-yellow-600 transition text-lg">
-                Self Sign Up
-            </a>
-        </div>
+<div class="wrap">
+  <h1>Send Push</h1>
+
+  <div class="card" id="balanceCard">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+      <div>Points Balance: <span class="balance" id="balance">—</span></div>
+      <div>
+        <input id="token" placeholder="Access token" style="width:220px">
+        <button class="secondary" id="refresh">Refresh</button>
+      </div>
     </div>
+    <div class="meta">1 point = 1 delivered push (per user). We deduct by <b>actual recipients</b> reported by OneSignal.</div>
+  </div>
 
-    
-</body>
-</html>
+  <div class="card">
+    <form id="pushForm">
+      <label>Title <input name="title" maxlength="100" required></label>
+      <label>Message <textarea name="message" maxlength="180" required></textarea></label>
+      <div class="row">
+        <label>Click URL <input name="url" type="url" placeholder="https://..."></label>
+        <label>Segment
+          <select name="segment">
+            <option>All</option>
+            <option>Active Users</option>
+            <option>Lapsed Users</option>
+          </select>
+        </label>
+      </div>
+
+      <details>
+        <summary>Image (optional)</summary>
+        <div class="row">
+          <label>Image URL <input id="imgUrl" name="image" type="url" placeholder="https://..."></label>
+          <label>or Upload <input id="imgFile" type="file" accept="image/*"></label>
+        </div>
+      </details>
+
+      <div class="row">
+        <label>Expected Recipients (optional, for pre-check)
+          <input name="expected_recipients" type="number" min="0" placeholder="e.g., 12000">
+        </label>
+        <div class="meta">If expected &gt; balance, send is blocked. Deduction uses actual recipients from OneSignal.</div>
+      </div>
+
+      <button type="submit">Send Now</button>
+      <div id="sendStatus" class="status"></div>
+    </form>
+  </div>
+
+  <div class="card">
+    <b>Recent Activity</b>
+    <table id="logTable">
+      <thead><tr><th>When</th><th>Type</th><th>Title/Note</th><th>Segment</th><th>Δ Points</th><th>Balance</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  // 👉 CHANGE THIS to your client Worker base (same origin also works)
+  const API_BASE = 'https://push.clientdomain.com';
+
+  const $ = s => document.querySelector(s);
+  const fmt = n => Number(n).toLocaleString('en-IN');
+  const when = ts => new Date(ts).toLocaleString();
+
+  async function call(path, opts={}) {
+    const token = $('#token').value.trim();
+    if (!token) throw new Error('Enter access token');
+    const r = await fetch(API_BASE + path, { ...opts, headers:{ 'x-dashboard-token': token, ...(opts.headers||{}) }});
+    const j = await r.json().catch(()=> ({}));
+    if (!r.ok || j.ok === false) throw new Error(j.error || r.statusText);
+    return j;
+  }
+
+  async function refresh() {
+    try {
+      const j = await call('/balance');
+      $('#balance').textContent = fmt(j.points);
+      const tb = $('#logTable tbody'); tb.innerHTML = '';
+      (j.logs||[]).forEach(l => {
+        const tr = document.createElement('tr');
+        const delta = l.type === 'topup' ? `+${fmt(l.add)}`
+                    : l.type === 'send'  ? `-${fmt(l.recipients||0)}`
+                    : '';
+        const titleOrNote = l.type === 'topup' ? (l.note || '') : (l.title || '');
+        tr.innerHTML =
+          `<td>${when(l.ts)}</td>
+           <td><span class="pill">${l.type}</span></td>
+           <td>${titleOrNote}</td>
+           <td>${l.segment||''}</td>
+           <td>${delta}</td>
+           <td>${fmt(l.after ?? '')}</td>`;
+        tb.appendChild(tr);
+      });
+    } catch(e) {
+      $('#balance').textContent = '—';
+      console.error(e);
+    }
+  }
+
+  async function uploadIfNeeded() {
+    const f = $('#imgFile').files[0];
+    if (!f) return $('#imgUrl').value || null;
+    const fd = new FormData(); fd.append('image', f);
+    const j = await call('/upload', { method:'POST', body: fd });
+    return j.url;
+  }
+
+  $('#refresh').onclick = refresh;
+
+  $('#pushForm').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const out = $('#sendStatus'); out.textContent = 'Sending...'; out.className = 'status';
+    try {
+      const form = new FormData(ev.target);
+      const image = await uploadIfNeeded();
+      const payload = Object.fromEntries(form.entries());
+      if (image) payload.image = image;
+      Object.keys(payload).forEach(k => { if (payload[k]==='') delete payload[k]; });
+
+      const j = await call('/send', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+      out.textContent = j.ok
+        ? `✅ Sent. OneSignal id: ${j.onesignal.id} | Recipients: ${j.recipients.toLocaleString()} | New balance: ${j.balance_after.toLocaleString()}`
+        : `❌ Failed: ${JSON.stringify(j.onesignal)}`;
+      out.className = j.ok ? 'status ok' : 'status bad';
+      refresh();
+    } catch(e) {
+      out.textContent = '❌ ' + e.message; out.className = 'status bad';
+    }
+  });
+
+  // initial
+  // (you can prefill token via ?t=TOKEN in URL if you like)
+  const params = new URLSearchParams(location.search);
+  if (params.get('t')) $('#token').value = params.get('t');
+  refresh();
+</script>
